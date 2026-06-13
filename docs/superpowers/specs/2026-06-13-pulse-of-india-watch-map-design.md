@@ -7,143 +7,134 @@
 ## 1. Purpose
 
 A cinematic, live-feeling "Pulse of India" map for leadership demos and all-hands. It
-shows, at a glance, where across India people are watching Stage right now and in which
-dialect. Optimized for **impact and storytelling**, not deep analysis. Primary audience:
-Vinay / leadership. Success = "show this to Vinay" reaction.
+shows, in real time, **where across India people are watching Stage and in which dialect**.
+Optimized for impact and storytelling. Primary audience: Vinay / leadership. Success =
+"show this to Vinay" reaction.
 
-## 2. What it shows
+It measures **consumption** (what is being watched right now), not acquisition. (An
+acquisition view — "where Khejdi is winning new signups" from trial events — is noted as a
+future variant, not in scope.)
+
+## 2. What it shows (validated by the working prototype)
 
 Single full-bleed dark page. The hero is India at night.
 
-- **Base map:** real India outline with district boundaries (GeoJSON), dimmed so it reads
-  as "night India."
-- **District nodes:** one glowing dot per district, placed at its true centroid.
-  - **Color = dominant watch-dialect** in that district (which language version wins
-    there): Haryanvi (gold `#efa73f`), Bhojpuri (warm-red `#e0563f`), Rajasthani
-    (violet `#b07cf0`), Gujarati (green `#2ecf7a`), Hindi/other (blue `#4ea8de`).
-  - **Brightness / size = people watching now** in that district.
-- **Motion:** ambient twinkle so the map is always alive; when a watch event lands in a
-  district, that node blooms briefly (the "constellation" feel).
-- **Headline counter (top):** animated count-up — e.g. "12,480 watching across 412
-  districts."
-- **Live ticker (side panel):** rolling feed — "Saanwari just started in Rohtak ·
-  Bahadhur in Patna …". Shows **content + district + dialect only — never user identity.**
-- **Dialect legend:** clicking a dialect spotlights only those districts.
-- **Hover a district:** tooltip with district name, dominant dialect, #1 title, watcher
-  count.
+- **Base map:** real India outline (district GeoJSON), dimmed and neutral — NOT fully
+  colored. Only places with actual viewers light up.
+- **City nodes:** one glowing dot per city at its **true lat/lng**.
+  - **Color = dominant watch-dialect** in that city: Haryanvi `#efa73f`, Bhojpuri
+    `#e0563f`, Rajasthani `#b07cf0`, Gujarati `#2ecf7a`, Marathi `#ff5d8f`,
+    Hindi/other `#4ea8de`.
+  - **Brightness / size = live viewers** in that city.
+- **Motion:** ambient twinkle + event-bloom when a play lands (the "constellation" feel).
+- **Headline counter:** animated "Watching now" count, with a live IST clock.
+- **Live ticker:** rolling "‹Show› — ‹City› · in ‹Dialect›" using each city's **actual
+  top show**. Content + city + dialect only — never user identity.
+- **Dialect legend.**
+- **Hover a city:** tooltip — city, #1 show, dialect, live viewers.
+- **Zoom + pan** (wheel + drag).
 
-## 3. Content & dialect model (important)
+## 3. Content & dialect model
 
-Content is **dialect-agnostic**. A title such as *Saanwari* exists in every dialect.
-Therefore:
+- Content is **dialect-agnostic** — the same title (e.g. *Saanwari*) exists across dialects.
+- **Dialect is a property of the watch**, not the title: which language version was watched.
+- **`dominantDialect` per city** = the most-watched watch-language there. The map reveals
+  regional language preference (Jaipur → Rajasthani, Pune → Marathi, Patna → Bhojpuri).
+- **`topShow` per city** = the actual #1 title watched there.
 
-- **Dialect is a property of the watch, not the title** — it is which dialect/language
-  version a user chose to watch in.
-- **`dominantDialect` per district** = the most-watched watch-language there. The same
-  shows can play everywhere; the map reveals *regional language preference*
-  (Rohtak watches in Haryanvi, Patna in Bhojpuri).
-- **`topTitles` per district** = plain titles (no dialect attached), with an optional
-  per-title dialect breakdown shown on detail.
+## 4. Data — VERIFIED against the live ClickHouse (connected via MCP)
 
-## 4. Architecture
+The brainstorm proved out the real sources by querying ClickHouse directly. Key findings:
 
-Three layers with one critical seam — the UI never knows where data comes from.
+- `raw_prod_events.consumption_video_start` (no suffix) is a **stale one-day snapshot**
+  (Apr 19–20). It also has no `show_title` and no Khejdi → do NOT use it.
+- `raw_prod_events_web.consumption_video_start_web` is a **real full year** (Jun'25–Apr'26)
+  with `context_geo_city`, `context_geo_location` (precise "lat,lng"), `dialect`,
+  `show_slug` — and **does contain Khejdi** (incl. #1 Marathi web title). Frozen at Apr 20.
+- **`raw_prod_events_backend.user_watch_log` is LIVE — current to today** (updates in real
+  time). Columns: `content_id`, `context_ip`, `timestamp`, `consumed_duration`, `user_id`.
+  This is the live source.
+- **Title + dialect join:** `user_watch_log.content_id` → `analytics_prod_core.dim_content`
+  (`content_title` / `show_title`, `content_dialect`). Verified on last-2-days data: returns
+  current shows (Bhikhaari Bana C.M, Mahapunarjanam, Plus Minus, Contract Marriage…).
+  Dialect is reliable; show_title resolves for most rows (some content_ids are
+  episode/microdrama-level → title null; refine via `show_id` join later).
+- **Geo:** there is NO in-DB geo-IP dictionary. The backend converts `context_ip` → city +
+  lat/lng using **MaxMind GeoLite2** (in-process `.mmdb` file, no external API calls).
+
+### Khejdi note (important for expectations)
+Khejdi drives **acquisition**, not consumption volume — a movie logs one play, a 50-episode
+series logs fifty. So a consumption map is correctly dominated by *Saanwari* / *Akhada* /
+*Mahapunarjanam*; Khejdi appears modestly. This is real, not a data error.
+
+## 5. Architecture
 
 ```
-[ React map UI ]  <-- JSON --  [ PulseDataSource interface ]
-                                      |-- SeededPulseSource  (realistic values, runs today)
-                                      |-- ClickHousePulseSource (real backend; swap-in later)
+[ React map UI ]  <-- JSON (poll ~20s) --  [ /api/pulse  (Node on Render) ]
+                                                  |  read-only ClickHouse creds
+                                                  |  MaxMind GeoLite2 (.mmdb)
+                                                  v
+              raw_prod_events_backend.user_watch_log  (live)
+                 ⋈ analytics_prod_core.dim_content    (title + dialect)
+                 + GeoLite2(context_ip) -> city, lat, lng
 ```
 
-The UI talks only to `PulseDataSource`. Going from seeded to live ClickHouse is a
-**one-line config swap**, no UI changes.
+The UI talks only to a `PulseDataSource` interface. Two implementations:
+- `LivePulseSource` — fetches `/api/pulse` (production).
+- `SeededPulseSource` — the verified Apr web slice, replayed on a day-clock (offline/demo
+  fallback, and what the current prototype runs on).
 
-### Data contract (fixed now, identical for both sources)
+### Backend `/api/pulse` (Node, Render)
+Every ~20s (cached), runs a windowed query over the **last N minutes** of `user_watch_log`:
+join `dim_content` for title+dialect, geolocate `context_ip` → city, group by city. Returns:
 
 ```ts
-type Dialect = 'haryanvi' | 'bhojpuri' | 'rajasthani' | 'gujarati' | 'hindi';
-
+type Dialect = 'haryanvi'|'bhojpuri'|'rajasthani'|'gujarati'|'marathi'|'hindi';
 type PulseSnapshot = {
-  totals: { watchersNow: number; districtsLive: number };
-  districts: Array<{
-    id: string;              // district code (matches GeoJSON feature id)
-    name: string;
-    centroid: [number, number];  // [lng, lat]
-    dominantDialect: Dialect;
-    watchers: number;            // concurrent watchers now
-    topTitles: Array<{ title: string; watchers: number }>;  // dialect-agnostic
+  totals: { watchersNow: number; citiesLive: number };
+  cities: Array<{
+    city: string; lat: number; lng: number;
+    dominantDialect: Dialect; watchers: number;       // distinct users active in window
+    topShow: string;
   }>;
-  recentEvents: Array<{          // feeds the ticker, newest last
-    title: string;
-    district: string;
-    dialect: Dialect;
-    ts: number;                  // epoch ms
-  }>;
+  recentEvents: Array<{ show: string; city: string; dialect: Dialect; ts: number }>;
 };
 ```
 
-## 5. Data strategy — real query, seeded values now, live later
-
-Decision: **build against the real ClickHouse aggregation and the real district list now,
-seeded with realistic values so it runs today; swap to the live connection when read-only
-access is granted.** Rationale: wiring a public app to production ClickHouse needs network +
-security coordination (credentials, IP allowlist) outside one person's control; building the
-real query + structure now makes go-live a switch-flip, not a rebuild, and yields a
-demo-able artifact this week.
-
-### Seeded source (v1, ships now)
-
-- District names + centroids come from the **real India district GeoJSON** (honest geography).
-- Each district gets a **regional dialect bias** (Haryana→Haryanvi, Bihar/east-UP→Bhojpuri,
-  Rajasthan→Rajasthani, Gujarat→Gujarati, else Hindi) so the map looks believable.
-- A small pool of **real Stage titles** (dialect-agnostic), e.g. Saanwari + others Shubham
-  provides.
-- A **simulation loop** generates weighted watch events over time so counts rise/fall, the
-  ticker flows, and nodes pulse — looks genuinely live.
-
-### ClickHouse source (v2, swap-in)
-
-- A small Node service holds read-only ClickHouse credentials, runs the
-  district→dialect→title aggregation on an interval, caches it, and serves the same
-  `PulseSnapshot` JSON at `/api/pulse`.
-- Frontend polls every N seconds.
-- **Open item:** confirm exact ClickHouse table + column names (district, watch-dialect,
-  title, timestamp, session/user) when access is provided. The SQL is written against
-  assumed columns until then.
+- **"Watching now" = live concurrency proxy:** distinct `user_id` with a watch event in the
+  last ~5 minutes, per city and total. Real and honest.
+- Backend never exposes ClickHouse to the browser; serves only aggregated JSON.
 
 ## 6. Tech stack
-
-- **Vite + React + TypeScript** — lightweight standalone app, faster than Next.js for a
-  self-contained viz.
-- **d3-geo** — India projection + placing dots at district centroids.
-- **Canvas 2D** — glow / pulse / animation (handles a few hundred glowing dots at 60fps with
-  full aesthetic control). deck.gl/WebGL is the upgrade path if richer bloom is wanted later.
-- **India district GeoJSON** — public dataset (to be sourced).
-- **Deploy:** Render static site (Shubham's usual) → public URL to share with Vinay.
+- **Vite + React + TypeScript** — standalone app.
+- **d3-geo** — India projection + plotting cities at lat/lng.
+- **Canvas 2D** — glow / pulse / animation (60fps for a few hundred dots).
+- **India district GeoJSON** — dim base (already sourced & simplified to ~244KB).
+- **Backend:** Node + `@clickhouse/client` (read-only) + `maxmind` (GeoLite2), on Render.
+- **Deploy:** frontend static on Render; backend service on Render → public URL for Vinay.
 
 ## 7. Scope
 
-### In v1 (the demo-able wow-piece)
-- Real India outline + district dots colored by dominant watch-dialect, brightness = watchers.
-- Ambient twinkle + event-bloom animation.
-- Headline animated count-up.
-- Live ticker (content + district + dialect).
-- Dialect legend with spotlight-on-click.
-- Hover tooltip per district.
-- `PulseDataSource` interface with `SeededPulseSource` implementation + the real SQL written
-  out (unused until access).
+### v1 (truly-live consumption map)
+- Dark India + live city dots by dominant dialect, brightness = live viewers.
+- Ambient + event-bloom animation, headline "Watching now" + IST clock.
+- Live ticker of real top shows per city; dialect legend; hover tooltip; zoom/pan.
+- `/api/pulse` backed by `user_watch_log` ⋈ `dim_content` + GeoLite2, polled ~20s.
+- `SeededPulseSource` fallback (verified Apr slice) so it always renders.
 
-### Deferred (clean follow-ups)
-- `ClickHousePulseSource` live backend behind the same interface (step 2).
-- Click → district deep panel (top 3 titles + dialect split) — v1.1.
-- Auto camera-tour between hotspots; time-scrubber / historical playback; dialect filtering.
+### Deferred
+- Acquisition view / toggle (trial events — "where Khejdi wins signups").
+- Click → city deep panel (top 5 shows + dialect split).
+- Refine episode/microdrama `content_id` → show via `show_id` join for fuller titles.
+- Auto camera-tour; time-scrubber / historical playback; dialect filtering.
 
-## 8. Open items (do not block design)
-1. Source an India district GeoJSON (Shubham OK with a public one; Claude to fetch).
-2. Real Stage title list per region (Shubham to provide; else seed with known titles —
-   Saanwari, etc.).
-3. Exact ClickHouse table/column names — confirmed when read-only access is granted.
+## 8. Open items (non-blocking)
+1. ClickHouse read-only credentials reachable from the Render backend (the MCP proves the
+   data exists; the deployed backend needs its own connection string).
+2. GeoLite2 license key (free) for the `.mmdb` file.
+3. Confirm `user_id` is the right concurrency key (vs `device_id`/`anonymous_id`).
 
 ## 9. Privacy
-The ticker and all surfaces show **content + geography + dialect only**. No user identity,
-phone, or PII ever appears. District is the finest geographic unit shown.
+All surfaces show **content + city + dialect only**. No user identity, phone, or PII. City
+is the finest geographic unit displayed; IPs are used server-side for geolocation only and
+never returned to the browser.
