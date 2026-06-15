@@ -1,140 +1,125 @@
 # Pulse of India — Stage Live Watch-Map (Design Spec)
 
-**Date:** 2026-06-13
+**Date:** 2026-06-13 (updated through prototype validation)
 **Author:** Shubham Singla (PM, Stage)
-**Status:** Approved design — ready for implementation plan
+**Status:** Prototype validated on real data — ready for implementation plan
 
 ## 1. Purpose
 
-A cinematic, live-feeling "Pulse of India" map for leadership demos and all-hands. It
-shows, in real time, **where across India people are watching Stage and in which dialect**.
-Optimized for impact and storytelling. Primary audience: Vinay / leadership. Success =
-"show this to Vinay" reaction.
+A cinematic, live "Pulse of India" map for leadership demos and all-hands: where across
+India people are watching Stage right now, in which dialect, and what's hot. Optimized for
+impact and storytelling. Audience: Vinay / leadership. Measures **consumption** (what's
+being watched), not acquisition.
 
-It measures **consumption** (what is being watched right now), not acquisition. (An
-acquisition view — "where Khejdi is winning new signups" from trial events — is noted as a
-future variant, not in scope.)
+## 2. What's on screen (validated in the prototype)
 
-## 2. What it shows (validated by the working prototype)
-
-Single full-bleed dark page. The hero is India at night.
-
-- **Base map:** real India outline (district GeoJSON), dimmed and neutral — NOT fully
-  colored. Only places with actual viewers light up.
-- **City nodes:** one glowing dot per city at its **true lat/lng**.
-  - **Color = dominant watch-dialect** in that city: Haryanvi `#efa73f`, Bhojpuri
-    `#e0563f`, Rajasthani `#b07cf0`, Gujarati `#2ecf7a`, Marathi `#ff5d8f`,
-    Hindi/other `#4ea8de`.
-  - **Brightness / size = live viewers** in that city.
-- **Motion:** ambient twinkle + event-bloom when a play lands (the "constellation" feel).
-- **Headline counter:** animated "Watching now" count, with a live IST clock.
-- **Live ticker:** rolling "‹Show› — ‹City› · in ‹Dialect›" using each city's **actual
-  top show**. Content + city + dialect only — never user identity.
-- **Dialect legend.**
-- **Hover a city:** tooltip — city, #1 show, dialect, live viewers.
-- **Zoom + pan** (wheel + drag).
+- **Dark India base** (district GeoJSON), dimmed — only cities with real viewers glow.
+- **City nodes** at true lat/lng, **colored by dominant watch-dialect** (Haryanvi gold,
+  Bhojpuri red, Rajasthani violet, Gujarati green, Marathi pink, Hindi/other blue),
+  **sized/brightened by live viewers**. Soft glow (tuned down — no harsh sparkle).
+- **Top-left HUD:** "Watching now" = the real total for the current time, a live IST clock,
+  cities-live count, and a **"🔥 #1 now"** line (the top show).
+- **Right panel — "Top shows now" leaderboard** (replaces the old per-second ticker):
+  ranked shows with bars; each number is that show's share of the live total, so the panel
+  reconciles with the headline. Khejdi sits #1.
+- **Interactions:** wheel-zoom, drag-pan, hover a city → its dialect + live viewers.
+- All numbers are ONE consistent metric (live concurrency); per-city values sum to the
+  headline total. No per-second noise.
 
 ## 3. Content & dialect model
 
-- Content is **dialect-agnostic** — the same title (e.g. *Saanwari*) exists across dialects.
-- **Dialect is a property of the watch**, not the title: which language version was watched.
-- **`dominantDialect` per city** = the most-watched watch-language there. The map reveals
-  regional language preference (Jaipur → Rajasthani, Pune → Marathi, Patna → Bhojpuri).
-- **`topShow` per city** = the actual #1 title watched there.
+Content is dialect-agnostic (same title across dialects). **Dialect = the watch-language**,
+not a property of the title. `dominantDialect` per city = the most-watched language there.
 
-## 4. Data — VERIFIED against the live ClickHouse (connected via MCP)
+## 4. Data — VALIDATED. Live source = Amplitude.
 
-The brainstorm proved out the real sources by querying ClickHouse directly. Key findings:
+The map is driven by **Amplitude** (project `255032`, Mobile App – Prod), event
+**`ce:NN_watching_user`** (Stage's "currently watching" custom event). Three real feeds,
+confirmed by querying Amplitude live:
 
-- `raw_prod_events.consumption_video_start` (no suffix) is a **stale one-day snapshot**
-  (Apr 19–20). It also has no `show_title` and no Khejdi → do NOT use it.
-- `raw_prod_events_web.consumption_video_start_web` is a **real full year** (Jun'25–Apr'26)
-  with `context_geo_city`, `context_geo_location` (precise "lat,lng"), `dialect`,
-  `show_slug` — and **does contain Khejdi** (incl. #1 Marathi web title). Frozen at Apr 20.
-- **`raw_prod_events_backend.user_watch_log` is LIVE — current to today** (updates in real
-  time). Columns: `content_id`, `context_ip`, `timestamp`, `consumed_duration`, `user_id`.
-  This is the live source.
-- **Title + dialect join:** `user_watch_log.content_id` → `analytics_prod_core.dim_content`
-  (`content_title` / `show_title`, `content_dialect`). Verified on last-2-days data: returns
-  current shows (Bhikhaari Bana C.M, Mahapunarjanam, Plus Minus, Contract Marriage…).
-  Dialect is reliable; show_title resolves for most rows (some content_ids are
-  episode/microdrama-level → title null; refine via `show_id` join later).
-- **Geo:** there is NO in-DB geo-IP dictionary. The backend converts `context_ip` → city +
-  lat/lng using **MaxMind GeoLite2** (in-process `.mmdb` file, no external API calls).
+| Feed | Amplitude chart (validated) | Drives |
+|------|------------------------------|--------|
+| **Total live** | `j0m5zxal` — Current Uniques of `consumption_video_start`, 5-min, IST. Real intraday curve: ~25 at 4 AM → ~350 peak afternoon/evening. | Headline "Watching now" by time of day |
+| **By city** | `6a3mklxy` / `2n2t7lpk` — `NN_watching_user` uniques grouped by `[Amplitude] City` (30-day & live 5-min) | City dot sizes + per-city tooltip (as shares of total) |
+| **By content** | `963e0apu` — `NN_watching_user` uniques grouped by `content_name` (ignore "(none)") | Leaderboard. **Khejdi #1 (~154), then Saanwari (~83), Naate (~64)** |
 
-### Khejdi note (important for expectations)
-Khejdi drives **acquisition**, not consumption volume — a movie logs one play, a 50-episode
-series logs fifty. So a consumption map is correctly dominated by *Saanwari* / *Akhada* /
-*Mahapunarjanam*; Khejdi appears modestly. This is real, not a data error.
+**Key data findings (important for the backend):**
+- `content_name` exists ONLY on `ce:NN_watching_user`. The standard `consumption_video_start`
+  event has show identity EMPTY (`show_title`/`content_name` = "(none)").
+- Amplitude's **ad-hoc query API rejects the custom event** `ce:NN_watching_user` — so the
+  backend must read these via the **saved-chart / Dashboard REST API** (the charts above) or
+  the Export API, NOT ad-hoc segmentation.
+- Amplitude double-counts the same show across scripts (Khejdi + खेजड़ी; Saanwari + साँवरी)
+  and emits junk values ("(none)", "Episode N") — the backend must **merge script variants
+  and filter junk**.
+- City names arrive percent-encoded / with diacritics (Sonīpat, Karnāl) — normalize.
+- Geo is **city-level only** in Amplitude (no lat/lng) — geocode city → coordinates (a
+  static gazetteer; ~98% of volume covered by ~140 cities). Prototype geocodes via a
+  city→centroid table.
+
+**Khejdi note:** Khejdi leads *live consumption* in Amplitude (`NN_watching_user`). It did
+NOT appear in the older ClickHouse `consumption_video_start` snapshot — that table was a
+stale Apr sample. Trust Amplitude for the live picture.
 
 ## 5. Architecture
 
 ```
-[ React map UI ]  <-- JSON (poll ~20s) --  [ /api/pulse  (Node on Render) ]
-                                                  |  read-only ClickHouse creds
-                                                  |  MaxMind GeoLite2 (.mmdb)
-                                                  v
-              raw_prod_events_backend.user_watch_log  (live)
-                 ⋈ analytics_prod_core.dim_content    (title + dialect)
-                 + GeoLite2(context_ip) -> city, lat, lng
+[ React map UI ]  <-- JSON (poll ~30s) --  [ /api/pulse  (Node on Render) ]
+                                                 |  Amplitude Dashboard REST API
+                                                 |  (charts j0m5zxal, 2n2t7lpk, 963e0apu)
+                                                 |  + city→latlng gazetteer
+                                                 |  + script-variant merge / junk filter
 ```
 
-The UI talks only to a `PulseDataSource` interface. Two implementations:
+UI talks only to a `PulseDataSource`:
 - `LivePulseSource` — fetches `/api/pulse` (production).
-- `SeededPulseSource` — the verified Apr web slice, replayed on a day-clock (offline/demo
-  fallback, and what the current prototype runs on).
+- `SeededPulseSource` — the validated real snapshot (today's Amplitude curve + city/content
+  values) replayed on the live clock. This is what the current prototype runs on, and the
+  offline/demo fallback.
 
-### Backend `/api/pulse` (Node, Render)
-Every ~20s (cached), runs a windowed query over the **last N minutes** of `user_watch_log`:
-join `dim_content` for title+dialect, geolocate `context_ip` → city, group by city. Returns:
-
+### `/api/pulse` (Node, Render), refreshed ~30s
+Reads the three Amplitude charts via the Dashboard REST API, merges/cleans, geocodes cities,
+returns:
 ```ts
-type Dialect = 'haryanvi'|'bhojpuri'|'rajasthani'|'gujarati'|'marathi'|'hindi';
-type PulseSnapshot = {
-  totals: { watchersNow: number; citiesLive: number };
-  cities: Array<{
-    city: string; lat: number; lng: number;
-    dominantDialect: Dialect; watchers: number;       // distinct users active in window
-    topShow: string;
-  }>;
-  recentEvents: Array<{ show: string; city: string; dialect: Dialect; ts: number }>;
+type Dialect='haryanvi'|'bhojpuri'|'rajasthani'|'gujarati'|'marathi'|'hindi';
+type PulseSnapshot={
+  totals:{ watchingNow:number };                                  // chart j0m5zxal current bucket
+  cities:Array<{city:string;lat:number;lng:number;dominantDialect:Dialect;watchers:number}>;
+  topShows:Array<{title:string;watchers:number;dialect?:Dialect}>;// chart 963e0apu, cleaned
 };
 ```
-
-- **"Watching now" = live concurrency proxy:** distinct `user_id` with a watch event in the
-  last ~5 minutes, per city and total. Real and honest.
-- Backend never exposes ClickHouse to the browser; serves only aggregated JSON.
+- `watchingNow` = current 5-min bucket of the Current-Uniques chart (real, time-accurate).
+- Per-city `watchers` = total × city share; sums to `watchingNow`.
+- Browser never sees Amplitude credentials.
 
 ## 6. Tech stack
-- **Vite + React + TypeScript** — standalone app.
-- **d3-geo** — India projection + plotting cities at lat/lng.
-- **Canvas 2D** — glow / pulse / animation (60fps for a few hundred dots).
-- **India district GeoJSON** — dim base (already sourced & simplified to ~244KB).
-- **Backend:** Node + `@clickhouse/client` (read-only) + `maxmind` (GeoLite2), on Render.
-- **Deploy:** frontend static on Render; backend service on Render → public URL for Vinay.
+- **Vite + React + TypeScript**; **d3-geo** projection; **Canvas 2D** glow/animation.
+- India district GeoJSON (dim base, simplified ~244KB) + city→latlng gazetteer.
+- Backend: Node + Amplitude Dashboard REST API client, on Render. Frontend static on Render.
 
 ## 7. Scope
 
 ### v1 (truly-live consumption map)
-- Dark India + live city dots by dominant dialect, brightness = live viewers.
-- Ambient + event-bloom animation, headline "Watching now" + IST clock.
-- Live ticker of real top shows per city; dialect legend; hover tooltip; zoom/pan.
-- `/api/pulse` backed by `user_watch_log` ⋈ `dim_content` + GeoLite2, polled ~20s.
-- `SeededPulseSource` fallback (verified Apr slice) so it always renders.
+- Dark India + live city dots by dominant dialect, sized by live viewers, soft glow.
+- HUD: real "Watching now" (time-accurate), live IST clock, "🔥 #1 now".
+- **Top-shows leaderboard** (shares of total), Khejdi-led.
+- Hover tooltip; zoom/pan.
+- `/api/pulse` over the three Amplitude charts (clean + geocode), polled ~30s; seeded
+  fallback so it always renders.
 
-### Deferred
-- Acquisition view / toggle (trial events — "where Khejdi wins signups").
-- Click → city deep panel (top 5 shows + dialect split).
-- Refine episode/microdrama `content_id` → show via `show_id` join for fuller titles.
-- Auto camera-tour; time-scrubber / historical playback; dialect filtering.
+### Deferred (backend-dependent)
+- **Click-to-spotlight (show → its cities).** Needs `content_name × city` on the same row,
+  which only the raw-event backend can compute (Amplitude ad-hoc can't; ClickHouse web table
+  covers a different/older show set and is thin on Khejdi). Build once the backend exposes it.
+- **Dialect-tinted leaderboard bars** — needs authoritative content→dialect from the backend
+  (avoid guessing).
+- Day-timeline scrubber; city drill-down; acquisition view (Khejdi signups).
 
 ## 8. Open items (non-blocking)
-1. ClickHouse read-only credentials reachable from the Render backend (the MCP proves the
-   data exists; the deployed backend needs its own connection string).
-2. GeoLite2 license key (free) for the `.mmdb` file.
-3. Confirm `user_id` is the right concurrency key (vs `device_id`/`anonymous_id`).
+1. Backend Amplitude API credentials (Dashboard REST API key/secret for project 255032).
+2. Confirm the canonical id for the `NN_watching_user` custom event for backend queries.
+3. Authoritative content→dialect mapping (for bar tints + spotlight).
 
 ## 9. Privacy
-All surfaces show **content + city + dialect only**. No user identity, phone, or PII. City
-is the finest geographic unit displayed; IPs are used server-side for geolocation only and
-never returned to the browser.
+Surfaces show **content + city + dialect only** — no user identity or PII. City is the
+finest geographic unit displayed.
