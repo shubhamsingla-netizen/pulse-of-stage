@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse of India — live</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}html,body{height:100%;}
+  body{background:radial-gradient(130% 100% at 50% 38%, #14100b 0%, #0a0807 48%, #000 100%);color:#e9e4dc;font-family:Inter,system-ui,Arial,sans-serif;overflow:hidden;}
+  canvas{position:absolute;inset:0;cursor:grab;}canvas.drag{cursor:grabbing;}
+  .vignette{position:fixed;inset:0;z-index:3;pointer-events:none;background:radial-gradient(115% 95% at 50% 44%, transparent 52%, rgba(0,0,0,.62) 100%);}
+  .panel{background:linear-gradient(180deg, rgba(26,22,18,.74), rgba(13,11,9,.66));backdrop-filter:blur(16px) saturate(125%);-webkit-backdrop-filter:blur(16px) saturate(125%);border:1px solid rgba(255,255,255,.08);border-radius:18px;box-shadow:0 14px 48px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07);}
+  .hud{position:absolute;left:28px;top:26px;z-index:5;padding:20px 24px 18px;min-width:230px;}
+  .live{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#efa73f;font-weight:700;}
+  .live .d{width:9px;height:9px;border-radius:50%;background:#ff5a3c;box-shadow:0 0 12px 4px rgba(255,90,60,.8);animation:blink 1.5s infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+  .lbl{font-size:11px;color:#8d857a;letter-spacing:.14em;margin-top:16px;text-transform:uppercase;}
+  .count{font-size:66px;font-weight:800;letter-spacing:-2.5px;line-height:.95;margin-top:4px;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 0 34px rgba(239,167,63,.45);}
+  .sub{font-size:12.5px;color:#9a948b;margin-top:9px;}
+  .clock{font-size:12.5px;color:#b6ad9f;margin-top:3px;font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  .top1{font-size:13px;color:#9a948b;margin-top:13px;padding-top:13px;border-top:1px solid rgba(255,255,255,.07);}
+  .top1 b{color:#efa73f;font-weight:700;}
+  .legend{position:absolute;left:28px;bottom:26px;z-index:5;display:flex;flex-direction:column;gap:10px;padding:14px 16px;}
+  .legend .row{display:flex;align-items:center;gap:9px;font-size:12.5px;color:#cfc8be;}
+  .legend .sw{width:11px;height:11px;border-radius:4px;}
+  .board-wrap{position:absolute;right:26px;top:26px;bottom:26px;width:340px;z-index:5;padding:20px 20px 16px;display:flex;flex-direction:column;}
+  .board-wrap h4{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#8d8056;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:18px;}
+  .board-wrap h4 .ld{width:7px;height:7px;border-radius:50%;background:#2ecf7a;box-shadow:0 0 9px #2ecf7a;animation:blink 1.5s infinite;}
+  .board{display:flex;flex-direction:column;gap:16px;}
+  .brow{display:flex;align-items:center;gap:13px;}
+  .brow .rk{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none;background:rgba(255,255,255,.06);color:#9a948b;border:1px solid rgba(255,255,255,.08);}
+  .brow.r1 .rk{background:linear-gradient(135deg,#efa73f,#e0563f);color:#1a1208;border:none;box-shadow:0 0 14px rgba(239,167,63,.5);}
+  .bcell{flex:1;min-width:0;}.bhead{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;}
+  .brow .nm{color:#fff;font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .brow .vc{color:#fff;font-weight:800;font-size:26px;line-height:1;letter-spacing:-1.2px;flex:none;font-variant-numeric:tabular-nums;text-shadow:0 0 18px rgba(239,167,63,.3);}
+  .brow.r1 .vc{color:#fbd9a0;}
+  .btrack{height:6px;border-radius:4px;margin-top:8px;background:rgba(255,255,255,.06);overflow:hidden;}
+  .bbar{height:100%;border-radius:4px;background:linear-gradient(90deg,#efa73f,#e0563f);box-shadow:0 0 12px rgba(239,167,63,.5);}
+  .hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;font-size:12px;color:#6f6960;pointer-events:none;text-align:center;max-width:60%;}
+  .hint b{color:#bdb6ab;}
+  #status{position:absolute;right:26px;bottom:8px;z-index:5;font-size:11px;color:#6f6960;}
+  #status .pill{color:#efa73f;}
+  #tip{position:absolute;z-index:8;pointer-events:none;display:none;padding:10px 13px;font-size:12px;line-height:1.5;background:rgba(12,10,8,.94);border:1px solid rgba(255,255,255,.12);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.6);transform:translate(-50%,-128%);white-space:nowrap;}
+  #tip .tn{font-weight:700;color:#fff;font-size:14px;}#tip .ts{color:#9a948b;margin-top:2px;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="vignette"></div>
+<div class="hud panel">
+  <div class="live"><span class="d"></span> Live · पूरे भारत में</div>
+  <div class="lbl">Watching now</div><div class="count"><span id="count">0</span></div>
+  <div class="sub"><span id="distc">0</span> cities lit</div>
+  <div class="clock" id="clock">—</div>
+  <div class="top1">🔥 #1 right now · <b id="topshow">—</b></div>
+</div>
+<div class="legend panel" id="legend"></div>
+<div class="board-wrap panel"><h4><span class="ld"></span> Top shows now</h4><div class="board" id="board"></div></div>
+<div id="tip"></div>
+<div id="status">—</div>
+<div class="hint">scroll to <b>zoom</b> · drag to <b>pan</b> · live active viewers (~15-min window) · color = dominant <b>watch-dialect</b></div>
+
+<script>
+const DIALECTS={haryanvi:{label:'Haryanvi',color:'#efa73f'},bhojpuri:{label:'Bhojpuri',color:'#e0563f'},
+  rajasthani:{label:'Rajasthani',color:'#b07cf0'},gujarati:{label:'Gujarati',color:'#2ecf7a'},
+  marathi:{label:'Marathi',color:'#ff5d8f'},hindi:{label:'Hindi / other',color:'#4ea8de'}};
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');const DPR=Math.min(devicePixelRatio||1,2);
+let W,H,INDIA,polys=[],minLng,minLat,maxLng,maxLat,cosMean,rangeX,rangeY;
+let k=1,px=0,py=0,s0=1,ox=0,oy=0,baseDirty=true;
+function proj(lng,lat){return [(lng-minLng)*cosMean,(maxLat-lat)];}
+function SX(rx){return (rx*s0+ox)*k+px;}function SY(ry){return (ry*s0+oy)*k+py;}
+function fit(){const m=80*DPR;s0=Math.min((W-2*m)/rangeX,(H-2*m)/rangeY);ox=(W-rangeX*s0)/2;oy=(H-rangeY*s0)/2;}
+function resize(){W=cv.width=Math.floor(innerWidth*DPR);H=cv.height=Math.floor(innerHeight*DPR);cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px';if(INDIA)fit();baseDirty=true;}
+addEventListener('resize',resize);
+
+// glow sprites
+const sprites={};
+for(const key in DIALECTS){const c=DIALECTS[key].color,sz=64,off=document.createElement('canvas');off.width=off.height=sz;
+  const o=off.getContext('2d'),g=o.createRadialGradient(sz/2,sz/2,0,sz/2,sz/2,sz/2);g.addColorStop(0,c);g.addColorStop(.22,c);g.addColorStop(1,'rgba(0,0,0,0)');o.fillStyle=g;o.fillRect(0,0,sz,sz);sprites[key]=off;}
+const leg=document.getElementById('legend');
+for(const key in DIALECTS){const d=DIALECTS[key],row=document.createElement('div');row.className='row';
+  row.innerHTML='<span class="sw" style="background:'+d.color+';box-shadow:0 0 8px '+d.color+'"></span>'+d.label;leg.appendChild(row);}
+
+let baseCanvas=document.createElement('canvas'),bctx=baseCanvas.getContext('2d');
+function renderBase(){if(!INDIA)return;baseCanvas.width=W;baseCanvas.height=H;bctx.clearRect(0,0,W,H);
+  for(const r of polys){bctx.beginPath();r.forEach((c,i)=>{const x=SX(c[0]),y=SY(c[1]);i?bctx.lineTo(x,y):bctx.moveTo(x,y);});bctx.closePath();
+    bctx.fillStyle='rgba(44,37,28,0.34)';bctx.fill();bctx.lineWidth=.6*DPR;bctx.strokeStyle='rgba(239,167,63,0.09)';bctx.stroke();}baseDirty=false;}
+
+// ---- live state ----
+let cityState=new Map();   // name -> {c,d,rx,ry,v,vt,ph}
+let cities=[], maxV=1, total={v:0,t:0}, topShows=[], stale=false, lastTs=0;
+const brefs=new Map();     // title -> {row,vc,bar,v,vt}
+const board=document.getElementById('board');
+
+function applyPulse(p){
+  stale=!!p.stale; lastTs=p.ts||Date.now();
+  // cities
+  const next=new Map();
+  let mv=1;
+  for(const c of p.cities){ if(c.viewers>mv)mv=c.viewers;
+    const pr=proj(c.lng,c.lat); const prev=cityState.get(c.city);
+    next.set(c.city,{c:c.city,d:DIALECTS[c.dialect]?c.dialect:'hindi',rx:pr[0],ry:pr[1],v:prev?prev.v:0,vt:c.viewers,ph:prev?prev.ph:Math.random()*6.28}); }
+  cityState=next; cities=[...cityState.values()]; maxV=mv;
+  document.getElementById('distc').textContent=cities.length.toLocaleString('en-IN');
+  // total
+  total.t=p.total||0;
+  // top shows
+  topShows=p.topShows||[];
+  document.getElementById('topshow').textContent=topShows[0]?topShows[0].title:'—';
+  rebuildBoard();
+}
+function rebuildBoard(){
+  board.innerHTML=''; brefs.clear();
+  topShows.slice(0,8).forEach((s,i)=>{const row=document.createElement('div');row.className='brow'+(i===0?' r1':'');
+    row.innerHTML='<span class="rk">'+(i+1)+'</span><div class="bcell"><div class="bhead"><span class="nm">'+s.title+'</span><span class="vc">0</span></div><div class="btrack"><div class="bbar" style="width:0%"></div></div></div>';
+    board.appendChild(row);brefs.set(s.title,{vc:row.querySelector('.vc'),bar:row.querySelector('.bbar'),v:0,vt:s.viewers});});
+}
+
+async function poll(){
+  try{const p=await (await fetch('/api/pulse',{cache:'no-store'})).json(); if(INDIA)applyPulse(p); else PENDING=p;}
+  catch(e){console.warn('poll failed',e);}
+  setTimeout(poll,20000);
+}
+let PENDING=null;
+
+// interaction
+let dragging=false,lx=0,ly=0;
+cv.addEventListener('mousedown',e=>{dragging=true;lx=e.clientX;ly=e.clientY;cv.classList.add('drag');});
+addEventListener('mouseup',()=>{dragging=false;cv.classList.remove('drag');});
+addEventListener('mousemove',e=>{if(dragging){px+=(e.clientX-lx)*DPR;py+=(e.clientY-ly)*DPR;lx=e.clientX;ly=e.clientY;baseDirty=true;hideTip();return;}hover(e.clientX*DPR,e.clientY*DPR,e.clientX,e.clientY);});
+cv.addEventListener('wheel',e=>{e.preventDefault();const mx=e.clientX*DPR,my=e.clientY*DPR;const f=e.deltaY<0?1.12:1/1.12;const nk=Math.max(1,Math.min(18,k*f));const r=nk/k;px=mx-(mx-px)*r;py=my-(my-py)*r;k=nk;baseDirty=true;hideTip();},{passive:false});
+const tip=document.getElementById('tip');function hideTip(){tip.style.display='none';}
+function hover(mx,my,cssx,cssy){let best=null,bd=16*DPR;for(const n of cities){const dx=SX(n.rx)-mx,dy=SY(n.ry)-my,dd=Math.sqrt(dx*dx+dy*dy);if(dd<bd){bd=dd;best=n;}}
+  if(best){const dl=DIALECTS[best.d];tip.style.display='block';tip.style.left=cssx+'px';tip.style.top=cssy+'px';
+    tip.innerHTML='<div class="tn">'+best.c+'</div><div class="ts"><b style="color:'+dl.color+'">'+dl.label+'</b> · '+Math.max(1,Math.round(best.v))+' watching</div>';}else hideTip();}
+
+function clockStr(){const n=new Date();const d=new Date(n.getTime()+n.getTimezoneOffset()*60000+19800000);
+  let H=d.getHours();const M=d.getMinutes(),S=d.getSeconds(),ap=H<12?'AM':'PM',h=H%12||12;const p=x=>x<10?'0'+x:x;return h+':'+p(M)+':'+p(S)+' '+ap+' IST';}
+
+let t=0;const elc=document.getElementById('count'),elClk=document.getElementById('clock'),elSt=document.getElementById('status');
+function frame(){t+=.016;
+  if(baseDirty)renderBase();
+  ctx.clearRect(0,0,W,H);if(baseCanvas.width)ctx.drawImage(baseCanvas,0,0);
+  // ease
+  total.v+=(total.t-total.v)*0.06;
+  const sorted=cities.slice().sort((a,b)=>b.vt-a.vt);const topC=sorted.slice(0,9),halo=sorted.slice(0,7);
+  ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<halo.length;i++){const n=halo[i];n.v+=(n.vt-n.v)*0.06;const x=SX(n.rx),y=SY(n.ry);
+    const base=(6+Math.sqrt(n.vt/maxV)*16)*DPR;const ph=(t*0.32+i*0.4)%1;const rr=base+ph*46*DPR;const a=(1-ph)*0.2;if(a>0){ctx.globalAlpha=a;ctx.lineWidth=1.3*DPR;ctx.strokeStyle=DIALECTS[n.d].color;ctx.beginPath();ctx.arc(x,y,rr,0,6.28);ctx.stroke();}}
+  for(const n of cities){n.v+=(n.vt-n.v)*0.06;const x=SX(n.rx),y=SY(n.ry);const tw=.86+.14*Math.sin(t*1.4+n.ph);
+    const inten=Math.min(1,(n.v/maxV)*1.15);let sz=(2.4+Math.sqrt(Math.max(0,n.v)/maxV)*18)*DPR;let a=Math.min(0.62,.1+inten*0.62)*tw;
+    const r=sz*2.0;ctx.globalAlpha=a;ctx.drawImage(sprites[n.d],x-r,y-r,r*2,r*2);
+    ctx.globalAlpha=Math.min(.5,a+.08);ctx.fillStyle='rgba(255,247,238,1)';ctx.beginPath();ctx.arc(x,y,sz*.28,0,6.28);ctx.fill();}
+  ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
+  // labels
+  ctx.font='700 '+(10.5*DPR)+'px Inter, system-ui, sans-serif';ctx.textBaseline='middle';
+  for(const n of topC){const x=SX(n.rx),y=SY(n.ry);const sz=(2.4+Math.sqrt(n.vt/maxV)*18)*DPR;
+    ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=5*DPR;ctx.fillStyle='rgba(255,255,255,.62)';ctx.fillText(n.c.toUpperCase(),x+sz*2+5*DPR,y);}
+  ctx.shadowBlur=0;
+  // HUD numbers
+  elc.textContent=Math.round(total.v).toLocaleString('en-IN');elClk.textContent=clockStr();
+  // scoreboard ease
+  let top=1;for(const b of brefs.values()){b.v+=(b.vt-b.v)*0.06;if(b.v>top)top=b.v;}
+  for(const b of brefs.values()){b.vc.textContent=Math.max(1,Math.round(b.v)).toLocaleString('en-IN');b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
+  // status
+  if(lastTs){const ago=Math.max(0,Math.round((Date.now()-lastTs)/1000));elSt.innerHTML=(stale?'<span class="pill">cached data</span> · ':'')+'updated '+ago+'s ago';}
+  requestAnimationFrame(frame);}
+
+// boot
+fetch('/geo.json').then(r=>r.json()).then(g=>{INDIA=g;[minLng,minLat,maxLng,maxLat]=g.bbox;cosMean=Math.cos((minLat+maxLat)/2*Math.PI/180);rangeX=(maxLng-minLng)*cosMean;rangeY=(maxLat-minLat);
+  polys=g.polys.map(p=>p.r.map(c=>proj(c[0],c[1])));resize();if(PENDING)applyPulse(PENDING);requestAnimationFrame(frame);});
+poll();
+</script>
+</body>
+</html>
