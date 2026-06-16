@@ -25,6 +25,26 @@ export async function ampTotal() {
   const d = await seg({});
   return lastNonZero(d.series && d.series[0]);
 }
+// Top shows from a SAVED Amplitude chart (content_name breakdown). Khejdi-led, live.
+export async function ampShows(chartId) {
+  const r = await fetch(`https://amplitude.com/api/3/chart/${chartId}/query`, { headers: { Authorization: AUTH }, signal: AbortSignal.timeout(15000) });
+  if (!r.ok) throw new Error('Amplitude chart ' + r.status);
+  const j = await r.json();
+  const rows = [];
+  const cr = j && j.data && j.data.csvResponse && j.data.csvResponse.data;
+  if (Array.isArray(cr)) {
+    for (const row of cr) if (Array.isArray(row) && row.length >= 2 && typeof row[0] === 'string' && !isNaN(Number(row[1]))) rows.push([row[0], Number(row[1])]);
+  } else if (j && j.data && Array.isArray(j.data.series)) {
+    (j.data.seriesLabels || []).forEach((lab, idx) => rows.push([Array.isArray(lab) ? lab[lab.length - 1] : lab, lastNonZero(j.data.series[idx])]));
+  }
+  const DEV = /[ऀ-ॿ]/, map = new Map();
+  for (let [name, v] of rows) {
+    name = String(name).replace(/[\x00-\x1F]/g, '').trim();
+    if (!name || name === '(none)' || /^Episode\s+\d+$/i.test(name) || DEV.test(name)) continue;
+    map.set(name, (map.get(name) || 0) + v);
+  }
+  return [...map].map(([title, viewers]) => ({ title, viewers: Math.round(viewers) })).sort((a, b) => b.viewers - a.viewers).slice(0, 8);
+}
 export async function ampCities() {
   const d = await seg({ g: 'city', limit: '100' });
   const labels = d.seriesLabels || [];

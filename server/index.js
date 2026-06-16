@@ -16,7 +16,7 @@ try {
   }
 } catch {}
 
-const { ampTotal, ampCities, hasAmp } = await import('./amp.js');
+const { ampTotal, ampCities, ampShows, hasAmp } = await import('./amp.js');
 const { buildPulse, buildShows, hasCH } = await import('./ch.js');
 const { geocodeCity } = await import('./geo.js');
 const seed = JSON.parse(fs.readFileSync(path.join(__dirname, 'seed.json'), 'utf8'));
@@ -30,8 +30,11 @@ async function buildSnapshot() {
         const g = geocodeCity(r.city);
         if (g) cities.push({ city: r.city, lat: g.lat, lng: g.lng, dialect: g.dialect, viewers: r.viewers });
       }
-      let topShows = seed.topShows;
-      if (hasCH) { try { topShows = await buildShows(); } catch (e) { console.error('[shows] CH failed:', e.message); } }
+      let topShows = seed.topShows; // Amplitude-derived snapshot (Khejdi-led) until a saved chart is wired
+      if (process.env.AMP_CONTENT_CHART_ID) {
+        try { topShows = await ampShows(process.env.AMP_CONTENT_CHART_ID); }
+        catch (e) { console.error('[shows] amp chart failed:', e.message); }
+      }
       return { ts: Date.now(), total, cities, topShows, source: 'amplitude' };
     } catch (e) { console.error('[pulse] Amplitude failed, falling back:', e.message); }
   }
