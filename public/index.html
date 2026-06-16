@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pulse of India — live</title>
+<title>Pulse of STAGE — live</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0;}html,body{height:100%;}
   body{background:radial-gradient(130% 100% at 50% 38%, #14100b 0%, #0a0807 48%, #000 100%);color:#e9e4dc;font-family:Inter,system-ui,Arial,sans-serif;overflow:hidden;}
@@ -82,7 +82,7 @@ const sprites={};
 for(const key in DIALECTS){const c=DIALECTS[key].color,sz=64,off=document.createElement('canvas');off.width=off.height=sz;
   const o=off.getContext('2d'),g=o.createRadialGradient(sz/2,sz/2,0,sz/2,sz/2,sz/2);g.addColorStop(0,c);g.addColorStop(.22,c);g.addColorStop(1,'rgba(0,0,0,0)');o.fillStyle=g;o.fillRect(0,0,sz,sz);sprites[key]=off;}
 const leg=document.getElementById('legend');
-for(const key in DIALECTS){const d=DIALECTS[key],row=document.createElement('div');row.className='row';
+for(const key in DIALECTS){if(key==='hindi')continue;const d=DIALECTS[key],row=document.createElement('div');row.className='row';
   row.innerHTML='<span class="sw" style="background:'+d.color+';box-shadow:0 0 8px '+d.color+'"></span>'+d.label;leg.appendChild(row);}
 
 let baseCanvas=document.createElement('canvas'),bctx=baseCanvas.getContext('2d');
@@ -101,9 +101,9 @@ function applyPulse(p){
   // cities
   const next=new Map();
   let mv=1;
-  for(const c of p.cities){ if(c.viewers>mv)mv=c.viewers;
+  for(const c of p.cities){ if(c.dialect==='hindi'||!DIALECTS[c.dialect]||c.dialect==='hindi')continue; if(c.viewers>mv)mv=c.viewers;
     const pr=proj(c.lng,c.lat); const prev=cityState.get(c.city);
-    next.set(c.city,{c:c.city,d:DIALECTS[c.dialect]?c.dialect:'hindi',rx:pr[0],ry:pr[1],v:prev?prev.v:0,vt:c.viewers,ph:prev?prev.ph:Math.random()*6.28,jit:prev?prev.jit:0}); }
+    next.set(c.city,{c:c.city,d:c.dialect,rx:pr[0],ry:pr[1],v:prev?prev.v:0,vt:c.viewers,ph:prev?prev.ph:Math.random()*6.28,jit:prev?prev.jit:0}); }
   cityState=next; cities=[...cityState.values()]; maxV=mv;
   document.getElementById('distc').textContent=cities.length.toLocaleString('en-IN');
   // total
@@ -180,12 +180,13 @@ function frame(){t+=.016;
   for(const n of topC){const x=SX(n.rx),y=SY(n.ry);const sz=(2.4+Math.sqrt(n.vt/maxV)*18)*DPR;
     ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=5*DPR;ctx.fillStyle='rgba(255,255,255,.62)';ctx.fillText(n.c.toUpperCase(),x+sz*2+5*DPR,y);}
   ctx.shadowBlur=0;
-  // HUD numbers
-  setRoller(elc,total.v+totJit);elClk.textContent=clockStr();
-  // scoreboard ease
+  elClk.textContent=clockStr();
+  // scoreboard ease + strictly descending; accumulate sum
   let top=1;for(const b of brefs.values()){b.v+=(b.vt-b.v)*0.06;if(b.v>top)top=b.v;}
-  let prevD=Infinity;
-  for(const b of brefs.values()){let disp=Math.max(1,Math.round(b.v+(b.jit||0)));if(disp>prevD)disp=prevD;prevD=disp;setRoller(b.vc,disp);b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
+  let prevD=Infinity,sumShows=0;
+  for(const b of brefs.values()){let disp=Math.max(1,Math.round(b.v+(b.jit||0)));if(disp>prevD)disp=prevD;prevD=disp;sumShows+=disp;setRoller(b.vc,disp);b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
+  // headline always >= visible scoreboard (whole >= its parts)
+  setRoller(elc, Math.max(Math.round(total.v+totJit), sumShows));
   // status
   if(lastTs){const ago=Math.max(0,Math.round((Date.now()-lastTs)/1000));elSt.innerHTML=(stale?'<span class="pill">cached data</span> · ':'')+'updated '+ago+'s ago';}
   requestAnimationFrame(frame);}

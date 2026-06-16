@@ -32,6 +32,8 @@ async function build() {
 }
 
 const snap = await build();
+// keep headline >= sum of top shows (whole >= its parts)
+snap.total = Math.max(snap.total || 0, (snap.topShows || []).reduce((a, x) => a + (x.viewers || 0), 0));
 const out = path.join(__dirname, '../public/pulse.json');
 fs.writeFileSync(out, JSON.stringify(snap));
 console.log('wrote pulse.json:', snap.source, '| total', snap.total, '| cities', snap.cities.length, '| shows', snap.topShows.length);
