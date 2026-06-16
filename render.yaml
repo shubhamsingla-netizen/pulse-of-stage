@@ -16,3 +16,5 @@ services:
         sync: false
       - key: CLICKHOUSE_DATABASE
         value: "default"
+      - key: AMP_CONTENT_CHART_ID
+        value: "0g3tnaix"
