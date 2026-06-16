@@ -121,7 +121,7 @@ function rebuildBoard(){
 }
 
 async function poll(){
-  try{const p=await (await fetch('/api/pulse',{cache:'no-store'})).json(); if(INDIA)applyPulse(p); else PENDING=p;}
+  try{const p=await (await fetch('pulse.json?t='+Date.now())).json(); if(INDIA)applyPulse(p); else PENDING=p;}
   catch(e){console.warn('poll failed',e);}
   setTimeout(poll,20000);
 }
@@ -191,7 +191,7 @@ function frame(){t+=.016;
   requestAnimationFrame(frame);}
 
 // boot
-fetch('/geo.json').then(r=>r.json()).then(g=>{INDIA=g;[minLng,minLat,maxLng,maxLat]=g.bbox;cosMean=Math.cos((minLat+maxLat)/2*Math.PI/180);rangeX=(maxLng-minLng)*cosMean;rangeY=(maxLat-minLat);
+fetch('geo.json').then(r=>r.json()).then(g=>{INDIA=g;[minLng,minLat,maxLng,maxLat]=g.bbox;cosMean=Math.cos((minLat+maxLat)/2*Math.PI/180);rangeX=(maxLng-minLng)*cosMean;rangeY=(maxLat-minLat);
   polys=g.polys.map(p=>p.r.map(c=>proj(c[0],c[1])));resize();if(PENDING)applyPulse(PENDING);requestAnimationFrame(frame);});
 poll();
 </script>

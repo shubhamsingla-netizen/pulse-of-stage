@@ -3,3 +3,5 @@ node_modules/
 dist/
 .env
 .env.local
+amplitude_content_watched_raw.csv
+docs/
