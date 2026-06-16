@@ -130,7 +130,7 @@ let PENDING=null;
 let totJit=0;
 setInterval(()=>{totJit=Math.round(Math.random()*4-2);
   for(const b of brefs.values()){const amp=b.vt>30?2:1;b.jit=Math.round((Math.random()*2-1)*amp);}
-  for(const c of cities){const a=c.vt>30?2:1;c.jit=Math.round((Math.random()*2-1)*a);}},4000);
+  for(const c of cities){const a=c.vt>30?2:1;c.jit=Math.round((Math.random()*2-1)*a);}},30000);
 
 // interaction
 let dragging=false,lx=0,ly=0;
