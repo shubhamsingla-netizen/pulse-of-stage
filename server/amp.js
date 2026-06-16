@@ -11,6 +11,13 @@ function istDate(daysBack = 0) {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
 }
 function lastNonZero(a) { if (!Array.isArray(a)) return 0; for (let i = a.length - 1; i >= 0; i--) if (a[i] > 0) return a[i]; return 0; }
+// last COMPLETE 5-min bucket: skip the most recent (in-progress, partial) bucket
+function lastComplete(a) {
+  if (!Array.isArray(a)) return 0;
+  const nz = [];
+  for (let i = a.length - 1; i >= 0 && nz.length < 3; i--) if (a[i] > 0) nz.push(a[i]);
+  return nz.length >= 2 ? nz[1] : (nz[0] || 0);
+}
 
 async function seg(extra) {
   const u = new URL('https://amplitude.com/api/2/events/segmentation');
@@ -23,7 +30,7 @@ async function seg(extra) {
 
 export async function ampTotal() {
   const d = await seg({});
-  return lastNonZero(d.series && d.series[0]);
+  return lastComplete(d.series && d.series[0]);
 }
 // Top shows from a SAVED Amplitude chart (content_name breakdown). Khejdi-led, live.
 export async function ampShows(chartId) {
@@ -51,7 +58,7 @@ export async function ampCities() {
   const out = [];
   labels.forEach((lab, idx) => {
     const city = Array.isArray(lab) ? lab[lab.length - 1] : lab;
-    const v = lastNonZero(d.series && d.series[idx]);
+    const v = lastComplete(d.series && d.series[idx]);
     if (v > 0 && city && city !== '(none)') out.push({ city, viewers: v });
   });
   return out.sort((a, b) => b.viewers - a.viewers).slice(0, 90);
