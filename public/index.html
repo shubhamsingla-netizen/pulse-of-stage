@@ -112,7 +112,7 @@ function rebuildBoard(){
   board.innerHTML=''; brefs.clear();
   topShows.slice(0,8).forEach((s,i)=>{const row=document.createElement('div');row.className='brow'+(i===0?' r1':'');
     row.innerHTML='<span class="rk">'+(i+1)+'</span><div class="bcell"><div class="bhead"><span class="nm">'+s.title+'</span><span class="vc">0</span></div><div class="btrack"><div class="bbar" style="width:0%"></div></div></div>';
-    board.appendChild(row);brefs.set(s.title,{vc:row.querySelector('.vc'),bar:row.querySelector('.bbar'),v:0,vt:s.viewers});});
+    board.appendChild(row);brefs.set(s.title,{vc:row.querySelector('.vc'),bar:row.querySelector('.bbar'),v:0,vt:s.viewers,jit:0});});
 }
 
 async function poll(){
@@ -121,6 +121,9 @@ async function poll(){
   setTimeout(poll,20000);
 }
 let PENDING=null;
+// gentle ±1-2 "alive" flicker every ~4s, centered on the real value (cosmetic)
+let totJit=0;
+setInterval(()=>{totJit=Math.round(Math.random()*4-2);for(const b of brefs.values()){const amp=b.vt>30?2:1;b.jit=Math.round((Math.random()*2-1)*amp);}},4000);
 
 // interaction
 let dragging=false,lx=0,ly=0;
@@ -157,10 +160,10 @@ function frame(){t+=.016;
     ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=5*DPR;ctx.fillStyle='rgba(255,255,255,.62)';ctx.fillText(n.c.toUpperCase(),x+sz*2+5*DPR,y);}
   ctx.shadowBlur=0;
   // HUD numbers
-  elc.textContent=Math.round(total.v).toLocaleString('en-IN');elClk.textContent=clockStr();
+  elc.textContent=Math.max(0,Math.round(total.v+totJit)).toLocaleString('en-IN');elClk.textContent=clockStr();
   // scoreboard ease
   let top=1;for(const b of brefs.values()){b.v+=(b.vt-b.v)*0.06;if(b.v>top)top=b.v;}
-  for(const b of brefs.values()){b.vc.textContent=Math.max(1,Math.round(b.v)).toLocaleString('en-IN');b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
+  for(const b of brefs.values()){b.vc.textContent=Math.max(1,Math.round(b.v+(b.jit||0))).toLocaleString('en-IN');b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
   // status
   if(lastTs){const ago=Math.max(0,Math.round((Date.now()-lastTs)/1000));elSt.innerHTML=(stale?'<span class="pill">cached data</span> · ':'')+'updated '+ago+'s ago';}
   requestAnimationFrame(frame);}
