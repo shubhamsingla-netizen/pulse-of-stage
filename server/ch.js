@@ -10,6 +10,7 @@ const PORT = process.env.CLICKHOUSE_PORT || '8443';
 const USER = process.env.CLICKHOUSE_USER || 'default';
 const PASS = process.env.CLICKHOUSE_PASSWORD || '';
 const DB   = process.env.CLICKHOUSE_DATABASE || 'default';
+const PROTO = process.env.CLICKHOUSE_PROTOCOL || (PORT === '8443' ? 'https' : 'http');
 export const hasCH = !!HOST;
 
 const DMAP = { har: 'haryanvi', raj: 'rajasthani', bho: 'bhojpuri', guj: 'gujarati', mar: 'marathi' };
@@ -22,7 +23,7 @@ function norm(s) {
 function geocode(name) { let k = norm(name); k = ALIAS[k] || k; return GAZ[k] || null; }
 
 async function ch(sql) {
-  const url = `https://${HOST}:${PORT}/?database=${encodeURIComponent(DB)}`;
+  const url = `${PROTO}://${HOST}:${PORT}/?database=${encodeURIComponent(DB)}`;
   const r = await fetch(url, {
     method: 'POST',
     headers: {
@@ -67,8 +68,22 @@ export async function buildPulse() {
     cities.push({ city: r.city, lat: ll[0], lng: ll[1], dialect: DMAP[r.dialect] || 'hindi', viewers: Number(r.viewers) });
   }
   if (dropped) console.log(`[pulse] ${dropped} cities not in gazetteer (skipped)`);
-  const topShows = ss
-    .map((r) => ({ title: String(r.title).replace(/[\x00-\x1F]/g, '').trim(), viewers: Number(r.viewers) }))
-    .filter((s) => s.title);
+  const topShows = cleanShows(ss);
   return { ts: Date.now(), total, cities, topShows };
+}
+
+function cleanShows(rows) {
+  const DEV = /[ऀ-ॿ]/, seen = new Set(), out = [];
+  for (const r of rows) {
+    const t = String(r.title).replace(/[\x00-\x1F]/g, '').trim();
+    if (!t || DEV.test(t)) continue;            // drop devanagari dups (Latin equivalents present)
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ title: t, viewers: Number(r.viewers) });
+  }
+  return out.slice(0, 8);
+}
+export async function buildShows() {
+  return cleanShows(await ch(Q_SHOWS));
 }
