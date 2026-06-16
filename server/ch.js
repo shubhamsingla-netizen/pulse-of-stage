@@ -82,7 +82,7 @@ function cleanShows(rows) {
     seen.add(k);
     out.push({ title: t, viewers: Number(r.viewers) });
   }
-  return out.slice(0, 8);
+  return out.slice(0, 10);
 }
 export async function buildShows() {
   return cleanShows(await ch(Q_SHOWS));

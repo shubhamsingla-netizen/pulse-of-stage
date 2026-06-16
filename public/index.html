@@ -25,7 +25,7 @@
   .board-wrap{position:absolute;right:26px;top:26px;bottom:26px;width:340px;z-index:5;padding:20px 20px 16px;display:flex;flex-direction:column;}
   .board-wrap h4{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#8d8056;font-weight:700;display:flex;align-items:center;gap:8px;margin-bottom:18px;}
   .board-wrap h4 .ld{width:7px;height:7px;border-radius:50%;background:#2ecf7a;box-shadow:0 0 9px #2ecf7a;animation:blink 1.5s infinite;}
-  .board{display:flex;flex-direction:column;gap:16px;}
+  .board{display:flex;flex-direction:column;gap:12px;}
   .brow{display:flex;align-items:center;gap:13px;}
   .brow .rk{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none;background:rgba(255,255,255,.06);color:#9a948b;border:1px solid rgba(255,255,255,.08);}
   .brow.r1 .rk{background:linear-gradient(135deg,#efa73f,#e0563f);color:#1a1208;border:none;box-shadow:0 0 14px rgba(239,167,63,.5);}
@@ -103,7 +103,7 @@ function applyPulse(p){
   let mv=1;
   for(const c of p.cities){ if(c.viewers>mv)mv=c.viewers;
     const pr=proj(c.lng,c.lat); const prev=cityState.get(c.city);
-    next.set(c.city,{c:c.city,d:DIALECTS[c.dialect]?c.dialect:'hindi',rx:pr[0],ry:pr[1],v:prev?prev.v:0,vt:c.viewers,ph:prev?prev.ph:Math.random()*6.28}); }
+    next.set(c.city,{c:c.city,d:DIALECTS[c.dialect]?c.dialect:'hindi',rx:pr[0],ry:pr[1],v:prev?prev.v:0,vt:c.viewers,ph:prev?prev.ph:Math.random()*6.28,jit:prev?prev.jit:0}); }
   cityState=next; cities=[...cityState.values()]; maxV=mv;
   document.getElementById('distc').textContent=cities.length.toLocaleString('en-IN');
   // total
@@ -115,7 +115,7 @@ function applyPulse(p){
 }
 function rebuildBoard(){
   board.innerHTML=''; brefs.clear();
-  topShows.slice(0,8).forEach((s,i)=>{const row=document.createElement('div');row.className='brow'+(i===0?' r1':'');
+  topShows.slice(0,10).forEach((s,i)=>{const row=document.createElement('div');row.className='brow'+(i===0?' r1':'');
     row.innerHTML='<span class="rk">'+(i+1)+'</span><div class="bcell"><div class="bhead"><span class="nm">'+s.title+'</span><span class="vc">0</span></div><div class="btrack"><div class="bbar" style="width:0%"></div></div></div>';
     board.appendChild(row);brefs.set(s.title,{vc:row.querySelector('.vc'),bar:row.querySelector('.bbar'),v:0,vt:s.viewers,jit:0});});
 }
@@ -128,7 +128,9 @@ async function poll(){
 let PENDING=null;
 // gentle ±1-2 "alive" flicker every ~4s, centered on the real value (cosmetic)
 let totJit=0;
-setInterval(()=>{totJit=Math.round(Math.random()*4-2);for(const b of brefs.values()){const amp=b.vt>30?2:1;b.jit=Math.round((Math.random()*2-1)*amp);}},4000);
+setInterval(()=>{totJit=Math.round(Math.random()*4-2);
+  for(const b of brefs.values()){const amp=b.vt>30?2:1;b.jit=Math.round((Math.random()*2-1)*amp);}
+  for(const c of cities){const a=c.vt>30?2:1;c.jit=Math.round((Math.random()*2-1)*a);}},4000);
 
 // interaction
 let dragging=false,lx=0,ly=0;
@@ -139,7 +141,7 @@ cv.addEventListener('wheel',e=>{e.preventDefault();const mx=e.clientX*DPR,my=e.c
 const tip=document.getElementById('tip');function hideTip(){tip.style.display='none';}
 function hover(mx,my,cssx,cssy){let best=null,bd=16*DPR;for(const n of cities){const dx=SX(n.rx)-mx,dy=SY(n.ry)-my,dd=Math.sqrt(dx*dx+dy*dy);if(dd<bd){bd=dd;best=n;}}
   if(best){const dl=DIALECTS[best.d];tip.style.display='block';tip.style.left=cssx+'px';tip.style.top=cssy+'px';
-    tip.innerHTML='<div class="tn">'+best.c+'</div><div class="ts"><b style="color:'+dl.color+'">'+dl.label+'</b> · '+Math.max(1,Math.round(best.v))+' watching</div>';}else hideTip();}
+    tip.innerHTML='<div class="tn">'+best.c+'</div><div class="ts"><b style="color:'+dl.color+'">'+dl.label+'</b> · '+Math.max(1,Math.round(best.v+(best.jit||0)))+' watching</div>';}else hideTip();}
 
 function clockStr(){const n=new Date();const d=new Date(n.getTime()+n.getTimezoneOffset()*60000+19800000);
   let H=d.getHours();const M=d.getMinutes(),S=d.getSeconds(),ap=H<12?'AM':'PM',h=H%12||12;const p=x=>x<10?'0'+x:x;return h+':'+p(M)+':'+p(S)+' '+ap+' IST';}
@@ -182,7 +184,8 @@ function frame(){t+=.016;
   setRoller(elc,total.v+totJit);elClk.textContent=clockStr();
   // scoreboard ease
   let top=1;for(const b of brefs.values()){b.v+=(b.vt-b.v)*0.06;if(b.v>top)top=b.v;}
-  for(const b of brefs.values()){setRoller(b.vc,Math.max(1,b.v+(b.jit||0)));b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
+  let prevD=Infinity;
+  for(const b of brefs.values()){let disp=Math.max(1,Math.round(b.v+(b.jit||0)));if(disp>prevD)disp=prevD;prevD=disp;setRoller(b.vc,disp);b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
   // status
   if(lastTs){const ago=Math.max(0,Math.round((Date.now()-lastTs)/1000));elSt.innerHTML=(stale?'<span class="pill">cached data</span> · ':'')+'updated '+ago+'s ago';}
   requestAnimationFrame(frame);}

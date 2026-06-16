@@ -49,7 +49,7 @@ export async function ampShows(chartId) {
     map.set(name, (map.get(name) || 0) + lastComplete(vals));
   }
   return [...map].map(([title, viewers]) => ({ title, viewers: Math.round(viewers) }))
-    .sort((a, b) => b.viewers - a.viewers).slice(0, 8);
+    .sort((a, b) => b.viewers - a.viewers).slice(0, 10);
 }
 export async function ampCities() {
   const d = await seg({ g: 'city', limit: '100' });
