@@ -41,6 +41,11 @@
   #status .pill{color:#efa73f;}
   #tip{position:absolute;z-index:8;pointer-events:none;display:none;padding:10px 13px;font-size:12px;line-height:1.5;background:rgba(12,10,8,.94);border:1px solid rgba(255,255,255,.12);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.6);transform:translate(-50%,-128%);white-space:nowrap;}
   #tip .tn{font-weight:700;color:#fff;font-size:14px;}#tip .ts{color:#9a948b;margin-top:2px;}
+  .roller{display:inline-flex;align-items:flex-start;font-variant-numeric:tabular-nums;}
+  .roller .slot{display:inline-block;height:1em;overflow:hidden;}
+  .roller .slot .col{display:flex;flex-direction:column;transition:transform .5s cubic-bezier(.2,.75,.25,1);}
+  .roller .slot .col span{display:block;height:1em;line-height:1em;text-align:center;}
+  .roller .comma{display:inline-block;}
 </style>
 </head>
 <body>
@@ -139,6 +144,20 @@ function hover(mx,my,cssx,cssy){let best=null,bd=16*DPR;for(const n of cities){c
 function clockStr(){const n=new Date();const d=new Date(n.getTime()+n.getTimezoneOffset()*60000+19800000);
   let H=d.getHours();const M=d.getMinutes(),S=d.getSeconds(),ap=H<12?'AM':'PM',h=H%12||12;const p=x=>x<10?'0'+x:x;return h+':'+p(M)+':'+p(S)+' '+ap+' IST';}
 
+// ---- rolling odometer digits ----
+function buildRoller(el,s){el.classList.add('roller');el.innerHTML='';el._parts=[];el._len=s.length;
+  for(const ch of s){ if(ch>='0'&&ch<='9'){const slot=document.createElement('span');slot.className='slot';const col=document.createElement('span');col.className='col';
+      for(let d=0;d<10;d++){const sp=document.createElement('span');sp.textContent=d;col.appendChild(sp);}
+      slot.appendChild(col);el.appendChild(slot);el._parts.push(col);
+      col.style.transition='none';col.style.transform='translateY(0)';
+    } else {const c=document.createElement('span');c.className='comma';c.textContent=ch;el.appendChild(c);el._parts.push(null);} }
+  requestAnimationFrame(()=>{for(const c of el._parts) if(c) c.style.transition='';});
+}
+function setRoller(el,num){const s=Math.max(0,Math.round(num)).toLocaleString('en-IN');
+  if(!el._parts||el._len!==s.length) buildRoller(el,s);
+  if(el._str===s) return; el._str=s;
+  for(let i=0;i<s.length;i++){const ch=s[i],col=el._parts[i];if(col&&ch>='0'&&ch<='9') col.style.transform='translateY(-'+(ch.charCodeAt(0)-48)+'em)';}
+}
 let t=0;const elc=document.getElementById('count'),elClk=document.getElementById('clock'),elSt=document.getElementById('status');
 function frame(){t+=.016;
   if(baseDirty)renderBase();
@@ -160,10 +179,10 @@ function frame(){t+=.016;
     ctx.shadowColor='rgba(0,0,0,.85)';ctx.shadowBlur=5*DPR;ctx.fillStyle='rgba(255,255,255,.62)';ctx.fillText(n.c.toUpperCase(),x+sz*2+5*DPR,y);}
   ctx.shadowBlur=0;
   // HUD numbers
-  elc.textContent=Math.max(0,Math.round(total.v+totJit)).toLocaleString('en-IN');elClk.textContent=clockStr();
+  setRoller(elc,total.v+totJit);elClk.textContent=clockStr();
   // scoreboard ease
   let top=1;for(const b of brefs.values()){b.v+=(b.vt-b.v)*0.06;if(b.v>top)top=b.v;}
-  for(const b of brefs.values()){b.vc.textContent=Math.max(1,Math.round(b.v+(b.jit||0))).toLocaleString('en-IN');b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
+  for(const b of brefs.values()){setRoller(b.vc,Math.max(1,b.v+(b.jit||0)));b.bar.style.width=(b.v/top*100).toFixed(1)+'%';}
   // status
   if(lastTs){const ago=Math.max(0,Math.round((Date.now()-lastTs)/1000));elSt.innerHTML=(stale?'<span class="pill">cached data</span> · ':'')+'updated '+ago+'s ago';}
   requestAnimationFrame(frame);}
