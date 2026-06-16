@@ -6,15 +6,23 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
+      # Amplitude (primary source) — set these in the Render dashboard
+      - key: AMP_API_KEY
+        sync: false
+      - key: AMP_SECRET_KEY
+        sync: false
+      - key: AMP_CONTENT_CHART_ID
+        value: "0g3tnaix"
+      # ClickHouse (fallback + content depends on setup) — set in dashboard
       - key: CLICKHOUSE_HOST
         sync: false
       - key: CLICKHOUSE_PORT
-        value: "8443"
+        value: "8123"
+      - key: CLICKHOUSE_PROTOCOL
+        value: "http"
       - key: CLICKHOUSE_USER
         sync: false
       - key: CLICKHOUSE_PASSWORD
         sync: false
       - key: CLICKHOUSE_DATABASE
         value: "default"
-      - key: AMP_CONTENT_CHART_ID
-        value: "0g3tnaix"
